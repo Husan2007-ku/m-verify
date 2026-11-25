@@ -16,8 +16,9 @@ import httpx
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 AUTHOR_CHAT_ID = os.environ.get("AUTHOR_CHAT_ID", "").strip()
-# Darvozabon: faqat shu username'ga sayt havolasi yuboriladi
-ALLOWED_USERNAME = os.environ.get("ALLOWED_USERNAME", "").strip().lstrip("@").lower()
+# Darvozabon: shu username'larga (vergul bilan) sayt havolasi yuboriladi
+_allowed_raw = os.environ.get("ALLOWED_USERNAMES", "") or os.environ.get("ALLOWED_USERNAME", "")
+ALLOWED_USERNAMES = {u.strip().lstrip("@").lower() for u in _allowed_raw.split(",") if u.strip()}
 SITE_URL = os.environ.get("SITE_URL", "").strip()
 # Render ishga tushganda tashqi URL'ni o'zi beradi
 BASE_URL = os.environ.get("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
@@ -136,8 +137,8 @@ async def webhook(req: Request):
         sender_id = str(chat.get("id") or frm.get("id") or "")
         is_author = bool(AUTHOR_CHAT_ID) and sender_id == str(AUTHOR_CHAT_ID)
 
-        # 1) Ruxsat berilgan username -> sayt havolasi
-        if ALLOWED_USERNAME and uname == ALLOWED_USERNAME:
+        # 1) Ruxsat berilgan username(lar) -> sayt havolasi
+        if uname and uname in ALLOWED_USERNAMES:
             greeting = (
                 "Assalomu alaykum 🤍\n\n"
                 "Senga atalgan bir maktub bor. Shoshilmay, boshidan oxirigacha o'qi:\n\n"
@@ -153,15 +154,21 @@ async def webhook(req: Request):
         if is_author:
             await tg_call("sendMessage", {"chat_id": chat.get("id"),
                 "text": ("Bot ishlayapti ✅\n"
-                         f"Sayt havolasi faqat @{ALLOWED_USERNAME or '—'} ga yuboriladi.\n"
+                         "Sayt havolasi faqat ruxsat etilgan akauntlarga yuboriladi.\n"
                          "Boshqa kim yozsa — shu yerda, senga ko'rinadi.")})
             return {"ok": True}
 
-        # 3) Boshqa hamma xabar -> faqat muallifga
+        # 3) Boshqa akauntlar -> tanishtirish so'rovi + muallifga yo'naltirish
+        intro = (
+            "Assalomu alaykum.\n"
+            "Bu bot shaxsiy — hozircha siz uchun xizmat ko'rsatmaydi.\n"
+            "Xizmatdan foydalanmoqchi bo'lsangiz, iltimos o'zingizni tanishtiring."
+        )
+        await tg_call("sendMessage", {"chat_id": chat.get("id"), "text": intro})
         if AUTHOR_CHAT_ID:
             who = ("@" + uname) if uname else (frm.get("first_name") or sender_id)
             await tg_call("sendMessage", {"chat_id": AUTHOR_CHAT_ID,
-                                          "text": f"✉️ Botga xabar — {who} (id {sender_id}):\n{text}"})
+                                          "text": f"✉️ Botga notanish xabar — {who} (id {sender_id}):\n{text}"})
         return {"ok": True}
 
     cq = upd.get("callback_query")
