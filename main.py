@@ -134,25 +134,34 @@ async def webhook(req: Request):
         uname = (frm.get("username") or "").lstrip("@").lower()
         text = msg.get("text", "") or ""
         sender_id = str(chat.get("id") or frm.get("id") or "")
-        # Muallifning o'z xabarlari aks-sado bermasligi uchun
-        if AUTHOR_CHAT_ID and sender_id == str(AUTHOR_CHAT_ID):
-            return {"ok": True}
+        is_author = bool(AUTHOR_CHAT_ID) and sender_id == str(AUTHOR_CHAT_ID)
+
+        # 1) Ruxsat berilgan username -> sayt havolasi
         if ALLOWED_USERNAME and uname == ALLOWED_USERNAME:
             greeting = (
                 "Assalomu alaykum 🤍\n\n"
-                "Senga atalgan bir maktub bor. Shoshilmay, boshидан oxirigacha o'qi:\n\n"
+                "Senga atalgan bir maktub bor. Shoshilmay, boshidan oxirigacha o'qi:\n\n"
                 f"{SITE_URL}"
             )
             await tg_call("sendMessage", {"chat_id": chat.get("id"), "text": greeting})
-            if AUTHOR_CHAT_ID:
+            if AUTHOR_CHAT_ID and not is_author:
                 await tg_call("sendMessage", {"chat_id": AUTHOR_CHAT_ID,
                                               "text": f"✅ @{uname} botga yozdi — sayt havolasi yuborildi."})
-        else:
-            # Boshqa hamma xabar faqat muallifga
-            if AUTHOR_CHAT_ID:
-                who = ("@" + uname) if uname else (frm.get("first_name") or sender_id)
-                await tg_call("sendMessage", {"chat_id": AUTHOR_CHAT_ID,
-                                              "text": f"✉️ Botga xabar — {who} (id {sender_id}):\n{text}"})
+            return {"ok": True}
+
+        # 2) Muallif (sen) yozsa -> holat javobi
+        if is_author:
+            await tg_call("sendMessage", {"chat_id": chat.get("id"),
+                "text": ("Bot ishlayapti ✅\n"
+                         f"Sayt havolasi faqat @{ALLOWED_USERNAME or '—'} ga yuboriladi.\n"
+                         "Boshqa kim yozsa — shu yerda, senga ko'rinadi.")})
+            return {"ok": True}
+
+        # 3) Boshqa hamma xabar -> faqat muallifga
+        if AUTHOR_CHAT_ID:
+            who = ("@" + uname) if uname else (frm.get("first_name") or sender_id)
+            await tg_call("sendMessage", {"chat_id": AUTHOR_CHAT_ID,
+                                          "text": f"✉️ Botga xabar — {who} (id {sender_id}):\n{text}"})
         return {"ok": True}
 
     cq = upd.get("callback_query")
