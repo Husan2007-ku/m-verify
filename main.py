@@ -16,6 +16,9 @@ import httpx
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 AUTHOR_CHAT_ID = os.environ.get("AUTHOR_CHAT_ID", "").strip()
+# Darvozabon: faqat shu username'ga sayt havolasi yuboriladi
+ALLOWED_USERNAME = os.environ.get("ALLOWED_USERNAME", "").strip().lstrip("@").lower()
+SITE_URL = os.environ.get("SITE_URL", "").strip()
 # Render ishga tushganda tashqi URL'ni o'zi beradi
 BASE_URL = os.environ.get("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
@@ -121,6 +124,35 @@ async def webhook(req: Request):
     try:
         upd = await req.json()
     except Exception:
+        return {"ok": True}
+
+    # --- Oddiy xabar: darvozabon (sayt yetkazib berish) ---
+    msg = upd.get("message") or upd.get("edited_message")
+    if msg:
+        frm = msg.get("from", {}) or {}
+        chat = msg.get("chat", {}) or {}
+        uname = (frm.get("username") or "").lstrip("@").lower()
+        text = msg.get("text", "") or ""
+        sender_id = str(chat.get("id") or frm.get("id") or "")
+        # Muallifning o'z xabarlari aks-sado bermasligi uchun
+        if AUTHOR_CHAT_ID and sender_id == str(AUTHOR_CHAT_ID):
+            return {"ok": True}
+        if ALLOWED_USERNAME and uname == ALLOWED_USERNAME:
+            greeting = (
+                "Assalomu alaykum 🤍\n\n"
+                "Senga atalgan bir maktub bor. Shoshilmay, boshидан oxirigacha o'qi:\n\n"
+                f"{SITE_URL}"
+            )
+            await tg_call("sendMessage", {"chat_id": chat.get("id"), "text": greeting})
+            if AUTHOR_CHAT_ID:
+                await tg_call("sendMessage", {"chat_id": AUTHOR_CHAT_ID,
+                                              "text": f"✅ @{uname} botga yozdi — sayt havolasi yuborildi."})
+        else:
+            # Boshqa hamma xabar faqat muallifga
+            if AUTHOR_CHAT_ID:
+                who = ("@" + uname) if uname else (frm.get("first_name") or sender_id)
+                await tg_call("sendMessage", {"chat_id": AUTHOR_CHAT_ID,
+                                              "text": f"✉️ Botga xabar — {who} (id {sender_id}):\n{text}"})
         return {"ok": True}
 
     cq = upd.get("callback_query")
