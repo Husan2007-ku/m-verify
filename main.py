@@ -103,6 +103,19 @@ async def status(session: str = ""):
     return {"status": s["status"] if s else "pending"}
 
 
+@app.post("/notify")
+async def notify(req: Request):
+    """Sayt javoblarini (token sayt kodida bo'lmasligi uchun) server orqali Telegramga yuboradi."""
+    try:
+        data = await req.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "bad json"}, status_code=400)
+    text = str(data.get("text", ""))[:3800]
+    if text and BOT_TOKEN and AUTHOR_CHAT_ID:
+        await tg_call("sendMessage", {"chat_id": AUTHOR_CHAT_ID, "text": text})
+    return {"ok": True}
+
+
 @app.post("/tg/webhook")
 async def webhook(req: Request):
     try:
